@@ -1,0 +1,60 @@
+name: MetaTrader 5 Backtest
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backtest:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Download and install MetaTrader 5
+        run: |
+          if (-not (Get-Command "C:\Program Files\MetaTrader 5\terminal64.exe" -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest -Uri "https://www.metatrader5.com/en/terminal/about" -OutFile "MT5Setup.exe"
+            Start-Process -FilePath "MT5Setup.exe" -ArgumentList '/S' -Wait
+          }
+
+      - name: Cache MetaTrader 5
+        uses: actions/cache@v2
+        with:
+          path: C:\Program Files\MetaTrader 5
+          key: mt5-cache
+
+      - name: Prepare backtest configuration
+        run: |
+          # Your backtest configuration preparation commands
+          # Validate configuration
+          if (-not (Test-Path 'path_to_your_configuration')) {
+            throw "Configuration path does not exist!"
+          }
+
+      - name: Run backtest
+        run: |
+          # Actual backtest command
+          $process = Start-Process -FilePath "C:\Program Files\MetaTrader 5\terminal64.exe" -ArgumentList '/BacktestCommand' -PassThru
+          $process.WaitForExit(600)
+          if (!$process.HasExited) {
+            $process.Kill()
+            throw "Backtest timed out!"
+          }
+
+      - name: Verify Results
+        run: |
+          # Your result verification commands
+          if (-not (Test-Path 'path_to_results')) {
+              throw "Results do not exist!"
+          }
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: Backtest Reports
+          path: path_to_reports_and_logs
+
+      - name: Provide Summary
+        run: |
+          echo "Backtesting completed successfully."
