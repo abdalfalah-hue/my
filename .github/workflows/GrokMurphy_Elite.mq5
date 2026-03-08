@@ -1,3 +1,15 @@
+git clone https://github.com/abdalfalah-hue/my.git
+cd my
+
+# Create directories
+mkdir -p .github/workflows
+
+# Add files
+# (paste the content into the files above)
+
+git add .
+git commit -m "Add MetaTrader 5 backtester setup"
+git push
 //+------------------------------------------------------------------+
 //|        GrokMurphy ELITE v1.0 – MT5 Expert Advisor               |
 //|  MERGE: GrokAlgo v2 (Gaussian+Fibonacci+Ehlers) +               |
