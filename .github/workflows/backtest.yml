@@ -1,60 +1,97 @@
-name: MetaTrader 5 Backtest
+name: GrokMurphy Auto Backtester
 
 on:
   workflow_dispatch:
+    inputs:
+      symbol:
+        description: 'Trading Symbol'
+        required: false
+        default: 'XAUUSD'
+
+env:
+  MT5_PATH: 'C:\MT5'
+  REPORT_PATH: 'C:\MT5\MQL5\Files\GrokReport.html'
 
 jobs:
   backtest:
     runs-on: windows-latest
-
+    timeout-minutes: 120
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      # ✅ ACTION VERSIONS UPDATED - No Deprecated Actions
+      
+      - name: Checkout Code
+        uses: actions/checkout@v4  # ✅ Latest version
+        with:
+          fetch-depth: 1
 
-      - name: Download and install MetaTrader 5
+      - name: Verify Configuration
         run: |
-          if (-not (Get-Command "C:\Program Files\MetaTrader 5\terminal64.exe" -ErrorAction SilentlyContinue)) {
-            Invoke-WebRequest -Uri "https://www.metatrader5.com/en/terminal/about" -OutFile "MT5Setup.exe"
-            Start-Process -FilePath "MT5Setup.exe" -ArgumentList '/S' -Wait
+          if (-Not (Test-Path "backtest_config.ini")) {
+            Write-Error "backtest_config.ini not found!"
+            exit 1
           }
+          Write-Output "✓ Configuration verified"
+        shell: powershell
 
       - name: Cache MetaTrader 5
-        uses: actions/cache@v2
+        uses: actions/cache@v4  # ✅ Latest version (was v2)
+        id: mt5-cache
         with:
-          path: C:\Program Files\MetaTrader 5
-          key: mt5-cache
+          path: C:\MT5
+          key: mt5-windows-${{ hashFiles('.github/workflows/backtest.yml') }}
+          restore-keys: mt5-windows-
 
-      - name: Prepare backtest configuration
+      - name: Download MetaTrader 5
+        if: steps.mt5-cache.outputs.cache-hit != 'true'
         run: |
-          # Your backtest configuration preparation commands
-          # Validate configuration
-          if (-not (Test-Path 'path_to_your_configuration')) {
-            throw "Configuration path does not exist!"
+          Write-Output "Downloading MT5..."
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri "http://www.metatrader5.com/download/mt5setup.exe" `
+            -OutFile "mt5setup.exe" -TimeoutSec 300
+          if (-Not (Test-Path "mt5setup.exe")) {
+            throw "MT5 download failed"
           }
+        shell: powershell
 
-      - name: Run backtest
+      - name: Install MetaTrader 5
+        if: steps.mt5-cache.outputs.cache-hit != 'true'
         run: |
-          # Actual backtest command
-          $process = Start-Process -FilePath "C:\Program Files\MetaTrader 5\terminal64.exe" -ArgumentList '/BacktestCommand' -PassThru
-          $process.WaitForExit(600)
-          if (!$process.HasExited) {
-            $process.Kill()
-            throw "Backtest timed out!"
+          Write-Output "Installing MT5..."
+          & "mt5setup.exe" /invisible /u /target:"$env:MT5_PATH"
+          Start-Sleep -Seconds 30
+          if (-Not (Test-Path "$env:MT5_PATH\terminal64.exe")) {
+            throw "MT5 installation failed"
           }
+        shell: powershell
+
+      - name: Run Backtest
+        run: |
+          Write-Output "Starting backtest..."
+          & "$env:MT5_PATH\terminal64.exe" /config:backtest_config.ini /exit
+        shell: powershell
+        timeout-minutes: 90
 
       - name: Verify Results
         run: |
-          # Your result verification commands
-          if (-not (Test-Path 'path_to_results')) {
-              throw "Results do not exist!"
+          if (Test-Path "$env:REPORT_PATH") {
+            Write-Output "✓ Report generated"
+          } else {
+            throw "Report not found"
           }
+        shell: powershell
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v2
+      - name: Upload Report
+        uses: actions/upload-artifact@v4  # ✅ Latest version (was v2/v3)
+        if: always()
         with:
-          name: Backtest Reports
-          path: path_to_reports_and_logs
+          name: GrokMurphy-Report
+          path: ${{ env.REPORT_PATH }}
+          retention-days: 30
 
-      - name: Provide Summary
+      - name: Summary
+        if: always()
         run: |
-          echo "Backtesting completed successfully."
+          Write-Output "═══════════════════════════════════"
+          Write-Output "  BACKTEST COMPLETE"
+          Write-Output "═══════════════════════════════════"
